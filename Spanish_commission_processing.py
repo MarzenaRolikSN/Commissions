@@ -187,26 +187,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                         hierarchy_col = col
                     elif "Classificación Comisiones" in col:
                         classification_col = col
-                
-                # # If exact matches not found, use more flexible matching
-                # if hierarchy_col is None:
-                #     for col in classifications_df.columns:
-                #         if "ISIS" in col and "Level 2" in col:
-                #             hierarchy_col = col
-                #             break
-                
-                # if classification_col is None:
-                #     for col in classifications_df.columns:
-                #         if "Clasific" in col and "Comision" in col:
-                #             classification_col = col
-                #             break
-                
-                # # If still not found, use the first and second columns
-                # if hierarchy_col is None and len(classifications_df.columns) > 0:
-                #     hierarchy_col = classifications_df.columns[0]
-                    
-                # if classification_col is None and len(classifications_df.columns) > 1:
-                #     classification_col = classifications_df.columns[1]
+            
                 
                 # Display the columns we're using
                 if hierarchy_col and classification_col:
