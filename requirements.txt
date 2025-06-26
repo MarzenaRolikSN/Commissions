@@ -1,1 +1,3 @@
 dateparser
+streamlit
+openpyxl

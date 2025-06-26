@@ -6,7 +6,12 @@ import io
 from datetime import datetime
 import dateparser
 from datetime import datetime
+import ptvsd
 import re
+
+# ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True)
+
+# ptvsd.wait_for_attach()
 
 st.set_page_config(
     page_title="Spanish Commissions Data Processing Tool",
