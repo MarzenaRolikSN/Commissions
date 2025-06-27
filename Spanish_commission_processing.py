@@ -41,7 +41,7 @@ def read_file(file):
                 encodings = ['utf-8', 'latin1', 'cp1252', 'ISO-8859-1']
                 for encoding in encodings:
                     try:
-                        return pd.read_csv(file, encoding=encoding)
+                        return pd.read_csv(file, encoding=encoding, dtype=str)
                     except UnicodeDecodeError:
                         continue
                 st.error(f"Could not decode file {file.name} with any of the attempted encodings")
@@ -51,7 +51,13 @@ def read_file(file):
                 return None
         elif file.name.endswith(('xlsx', 'xls')):
             try:
-                return pd.read_excel(file)
+                # Read the first row to get column names
+                temp_df = pd.read_excel(file, nrows=0)
+                # Rewind the file pointer to the beginning
+                file.seek(0)
+                # Build dtype dict for all columns as str
+                dtype_dict = {col: str for col in temp_df.columns}
+                return pd.read_excel(file, dtype=dtype_dict)
             except Exception as e:
                 st.error(f"Error reading Excel file: {e}")
                 return None
@@ -70,12 +76,20 @@ def normalize_date_format(date_string):
     cleaned_date = re.sub(r'[_\s]+', '', date_string.strip())
     cleaned_date = re.sub(r'[^\d\-/]', '', cleaned_date)  # Keep only digits, hyphens, and slashes
     
+        # Return None if cleaned_date is empty or only whitespace
+    if not cleaned_date or not cleaned_date.strip():
+        return None
+    
     # Try to parse with dateparser first (most reliable)
     try:
-        import dateparser
         parsed_date = dateparser.parse(cleaned_date, languages=['es', 'en'])
         if parsed_date:
+            # Compare date (ignore time part)
+            today = datetime.now().date()
+            if parsed_date.date() > today:
+                return None
             return parsed_date.strftime("%d/%m/%Y")
+        
     except ImportError:
         pass
     except Exception:
@@ -148,13 +162,13 @@ def extract_sap_notes_info(note):
     note = str(note)
     
     nhc_patterns = [
-        r'NHC:?\s*\*\*\s*([^*]+)\s*\*\*',        # NHC: ** 12345 **
-        r'NHC:?\s*\*\s*([^*]+)\s*\*',            # NHC: * 12345 *
-        r'NHC:?\s*(\d+)',                        # NHC: 12345 or NHC 12345
+        r'NHC:?\s*\*\*\s*([^*]+)\s*\*\*',  # NHC: ** 12345 **
+        r'NHC:?\s*\*\s*([^*]+)\s*\*',      # NHC: * 12345 *
+        r'NHC:?\s+(\d+)',                  # NHC: 12345 or NHC  12345
         r'NHC:?\s*(?:NUMERO|NÚMERO|N[º°]|NUM)?\.?\s*:?\s*(\d+)',  # NHC: NUMERO: 12345, NHC Nº: 12345
         r'NHC:?\s*(?:NUM|NUMERO|NÚMERO|N[º°])?\s*\.?\s*(\w+)',    # NHC NUM. ABC123
-        r'N\.?\s*H\.?\s*C\.?:?\s*(\d+)',         # N.H.C.: 12345
-        r'NH:?\s*(\d+)',                         # NH: 12345
+        r'N\.?\s*H\.?\s*C\.?:?\s+(\d+)',   # N.H.C.: 12345 (with flexible spaces)
+        r'NH:?\s+(\d+)',                   # NH: 12345 (with flexible spaces)
         r'HISTORIA:?\s*(?:NUM|NUMERO|NÚMERO|N[º°])?\s*\.?\s*(\d+)' # HISTORIA NUM. 12345
     ]
     
@@ -163,17 +177,20 @@ def extract_sap_notes_info(note):
         nhc_match = re.search(pattern, note, re.IGNORECASE)
         if nhc_match:
             nhc = nhc_match.group(1).strip()
+            nhc = nhc.replace('_', '')
             break
+    else:
+        nhc = "NHC NO INFORMADO"
 
     doctor_patterns = [
-        r'N\.?\s*MEDICO:?\s*ºº\s*([^º]+)\s*ºº',                  # N. MEDICO: ºº Dr. Smith ºº
-        r'N\.?\s*MEDICO:?\s*\*\*\s*([^*]+)\s*\*\*',              # N. MEDICO: ** Dr. Smith **
-        r'DOCTOR:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)', # DOCTOR: Dr. Smith OTHER_FIELD:
-        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',    # DR. Dr. Smith OTHER_FIELD:
-        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)$',              # DR. Dr. Smith (at end of text)
+        r'N\.?\s*MEDICO:?\s*ºº\s*([^º]+)\s*ºº',  # N. MEDICO: ºº Dr. Smith ºº
+        r'N\.?\s*MEDICO:?\s*\*\*\s*([^*]+)\s*\*\*',  # N. MEDICO: ** Dr. Smith **
+        r'DOCTOR:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',  # DOCTOR: Dr. Smith OTHER_FIELD:
+        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',  # DR. Dr. Smith OTHER_FIELD:
+        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)$',  # DR. Dr. Smith (at end of text)
         r'MEDICO:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)'  # MEDICO: Dr. Smith OTHER_FIELD:
     ]
-    
+
     # Extract doctor name
     doctor = None
     for pattern in doctor_patterns:
@@ -198,12 +215,22 @@ def extract_sap_notes_info(note):
     
     # Step 2: Extract specific date text using regex patterns
     fecha_patterns = [
-        r'F\.?\s*INTERVENCIÓN:?\s*\[\[\s*([^\]]+)',       # F.INTERVENCIÓN: [[ date
-        r'F\.?\s*INT\.?:?\s*\[\[\s*([^\]]+)',             # F.INT: [[ date
-        r'F\.?\s*INTERVENCIÓN:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # F.INTERVENCIÓN: 01/01/2023
-        r'F\.?\s*INT\.?:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',        # F.INT: 01/01/2023
-        r'FECHA\s*(?:DE)?\s*(?:LA)?\s*INTERVENCIÓN:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # FECHA DE LA INTERVENCIÓN: 01/01/2023
-        r'INTERVENIDO:?\s*(?:EL|EN)?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})'                  # INTERVENIDO EL 01/01/2023
+        # F.INTERVENCIÓN: [[ 20.01.4.2025]], F.INTERVENCIÓN: [[ 20./01/2025]], F.INTERVENCIÓN: [[ 2.052025 ]], F.INTERVENCIÓN: [[ 2052025 ]]
+        r'F\.?\s*INTERVENCI[ÓO]N:?\s*\[\[\s*([\d./\s]+)\s*\]\]',
+        # FECHA INT.: [[ 03/05/2025 ]], FECHA INT [[ 03/05/2025 ]], FECHA INT: [[ 03/05/2025 ]]
+        r'FECHA\s*INT\.?:?\s*\[\[\s*([\d./\s]+)\s*\]\]',
+        r'FECHA\s*INT\.?\s*\[\[\s*([\d./\s]+)\s*\]\]',  # Handles missing colon
+        # F.I. 26.03.2025, F.I 14/02/2025
+        r'F\.?\s*I\.?\s*[:.]?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # FECHA: 19/04/23
+        r'FECHA:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # F.INTERVENCIÓN: 01/01/2023, F.INT: 01/01/2023
+        r'F\.?\s*INTERVENCI[ÓO]N:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        r'F\.?\s*INT\.?:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # FECHA DE LA INTERVENCIÓN: 01/01/2023
+        r'FECHA\s*(?:DE)?\s*(?:LA)?\s*INTERVENCI[ÓO]N:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # INTERVENIDO EL 01/01/2023
+        r'INTERVENIDO:?\s*(?:EL|EN)?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
     ]
     
     fecha_raw = None
@@ -465,16 +492,29 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                     
                     # Extract information from SAP Notes
                     # Extract information from SAP Notes
-                    base_df["NHC - Textos"] = None
+                    base_df["NHC"] = None
                     base_df["F. Int - Textos"] = None
-                    base_df["Surgeon Name"] = None
+                    base_df["DOCTOR"] = None
 
                     for idx, note in enumerate(base_df["SAPNotes"]):
                         if pd.notna(note):
                             nhc, fecha_int, doctor = extract_sap_notes_info(note)
-                            base_df.at[idx, "NHC - Textos"] = nhc
-                            base_df.at[idx, "F. Int - Textos"] = fecha_int
-                            base_df.at[idx, "Surgeon Name"] = doctor
+                            base_df.at[idx, "NHC"] = nhc
+                            if fecha_int is not None:
+                                base_df.at[idx, "F. Int - Textos"] = fecha_int
+                            else:
+                                invoice_date_value = base_df.at[idx, "Invoice Date"]
+                                    # Convert to datetime if not already, handle errors gracefully
+                                if not isinstance(invoice_date_value, pd.Timestamp):
+                                    invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
+                                if pd.notnull(invoice_date_value):
+                                    base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
+                                else:
+                                    base_df.at[idx, "F. Int - Textos"] = ""  # Or handle missing/invalid dates as you prefer                            if base_df.at[idx, "DOCTOR"] is None or base_df.at[idx, "DOCTOR"] == 'NO INFORMADO':
+                            if doctor and doctor.strip() and not re.fullmatch(r"_+", doctor.strip()):
+                                base_df.at[idx, "DOCTOR"] = doctor.strip()
+                            else:
+                                base_df.at[idx, "DOCTOR"] = 'NO INFORMADO'
                     
                     st.success("SAP Notes extraction completed")
                 else:
@@ -534,9 +574,30 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             
             st.success("Number Attributes replacement completed")
 
+            # 3. Extract data from SAP Notes
+            st.write("Extracting data from SAMES..")
+
+            # # Create a mapping dictionary from po_df
+            sames_mapping = dict(zip(sames_df['NHC NUMERO'], sames_df['Comisionista (11)']))
+
+            base_df['INICIADOR SAMES'] = None
+            base_df['INICIADOR SAMES'] = base_df["NHC"].map(sames_mapping)
+
+
+            # Optional: Check for any unmatched records
+            unmatched = base_df['INICIADOR SAMES'].isna().sum()
+            if unmatched > 0:
+                print(f"Warning: {unmatched} records could not be matched")
+            
+            st.success(f"SAMES mapping completed: {sum(base_df['INICIADOR SAMES'].notna())} rows updated")
+
+
             # Show the processed dataframe
             st.subheader("Step 3: Results")
             st.write("Processed Base File Preview:")
+            
+            base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
+
             st.dataframe(base_df.head(100))
             
             # Download the processed file
