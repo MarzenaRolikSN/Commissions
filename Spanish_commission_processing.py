@@ -177,10 +177,17 @@ def extract_sap_notes_info(note):
         nhc_match = re.search(pattern, note, re.IGNORECASE)
         if nhc_match:
             nhc = nhc_match.group(1).strip()
-            nhc = nhc.replace('_', '')
+        # Count underscores in the matched string
+            underscore_count = nhc.count('_')
+        # If multiple underscores, set nhc to None
+            if underscore_count > 1:
+                nhc = None
+            else:
+            # Remove the underscore if there is exactly one
+                nhc = nhc.replace('_', '')
             break
     else:
-        nhc = "NHC NO INFORMADO"
+        nhc = None
 
     doctor_patterns = [
         r'N\.?\s*MEDICO:?\s*ºº\s*([^º]+)\s*ºº',  # N. MEDICO: ºº Dr. Smith ºº
@@ -496,25 +503,54 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                     base_df["F. Int - Textos"] = None
                     base_df["DOCTOR"] = None
 
+                    NHC_From_SO_PO_patterns = r'NHC\s*(?:CIC\s+(\d+(?:\s*/\s*\d+)?)|:?\s*\*{0,2}\s*([A-Za-z0-9]+(?:\s*/\s*[A-Za-z0-9]+)?)\s*\*{0,2})'
+
                     for idx, note in enumerate(base_df["SAPNotes"]):
                         if pd.notna(note):
                             nhc, fecha_int, doctor = extract_sap_notes_info(note)
-                            base_df.at[idx, "NHC"] = nhc
-                            if fecha_int is not None:
+                            if nhc is not None:
+                                base_df.at[idx, "NHC"] = nhc
+                            else:
+                                so_po = base_df.at[idx, "SO PO Number"]
+                                match = re.search(NHC_From_SO_PO_patterns, so_po)
+
+                                if match:
+                                    nhc = match.group(1) or match.group(2)  # Extract the captured group (the number or numbers with slash)
+                                    base_df.at[idx, "NHC"] = nhc
+                                else:
+                                    base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
+
+                            if fecha_int is not None and fecha_int != "None":
                                 base_df.at[idx, "F. Int - Textos"] = fecha_int
                             else:
                                 invoice_date_value = base_df.at[idx, "Invoice Date"]
-                                    # Convert to datetime if not already, handle errors gracefully
-                                if not isinstance(invoice_date_value, pd.Timestamp):
-                                    invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
+                                #     # Convert to datetime if not already, handle errors gracefully
+                                # if not isinstance(invoice_date_value, pd.Timestamp):
+                                invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
                                 if pd.notnull(invoice_date_value):
                                     base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
-                                else:
-                                    base_df.at[idx, "F. Int - Textos"] = ""  # Or handle missing/invalid dates as you prefer                            if base_df.at[idx, "DOCTOR"] is None or base_df.at[idx, "DOCTOR"] == 'NO INFORMADO':
+
                             if doctor and doctor.strip() and not re.fullmatch(r"_+", doctor.strip()):
                                 base_df.at[idx, "DOCTOR"] = doctor.strip()
                             else:
                                 base_df.at[idx, "DOCTOR"] = 'NO INFORMADO'
+                        else:
+                            invoice_date_value = base_df.at[idx, "Invoice Date"]
+                             # Convert to datetime if not already, handle errors gracefully
+                            if not isinstance(invoice_date_value, pd.Timestamp):
+                                invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
+
+                                if pd.notnull(invoice_date_value):
+                                    base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
+                            
+                            so_po = base_df.at[idx, "SO PO Number"]
+                            match = re.search(NHC_From_SO_PO_patterns, so_po)
+
+                            if match:
+                                nhc = match.group(1) or match.group(2) # Extract the captured group (the number or numbers with slash)
+                                base_df.at[idx, "NHC"] = nhc
+                            else:
+                                base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
                     
                     st.success("SAP Notes extraction completed")
                 else:
@@ -596,7 +632,8 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             st.subheader("Step 3: Results")
             st.write("Processed Base File Preview:")
             
-            base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
+            #base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
+            base_df["Invoice Date"] = pd.to_datetime(base_df["Invoice Date"], errors='coerce').dt.strftime("%d/%m/%Y")
 
             st.dataframe(base_df.head(100))
             
