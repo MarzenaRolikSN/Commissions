@@ -560,6 +560,20 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                             else:
                                 base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
                     
+                    def clean_doctor(value):
+                     # Handle NaN or empty strings
+                        if pd.isna(value) or str(value).strip() == '':
+                            return 'NO INFORMADO'
+                        # Handle hyphen
+                        if str(value).strip() == '-':
+                            return 'No informado'
+                        # Handle numbers
+                        if str(value).strip().isdigit():
+                            return 'NO INFORMADO'
+                        return value
+
+                    base_df['Doctor'] = base_df['Doctor'].apply(clean_doctor)
+
                     st.success("SAP Notes extraction completed")
                 else:
                     st.warning("Could not find required columns in SAP Notes file")
@@ -633,7 +647,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             if unmatched > 0:
                 print(f"Warning: {unmatched} records could not be matched")
             sum_not_matched = sum(base_df['INICIADOR SAMES'].notna())
-            base_df['INICIADOR SAMES'] = base_df['INICIADOR SAMES'].fillna('NHC NO ENCONTRADO')
+            base_df['DOCTOR'] = base_df['DOCTOR'].fillna('NO INFORMADO')
 
             st.success(f"SAMES mapping completed: {sum_not_matched} rows matched")
 
@@ -644,12 +658,14 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             
             #base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
             base_df["Invoice Date"] = pd.to_datetime(base_df["Invoice Date"], errors='coerce').dt.strftime("%d/%m/%Y")
+            base_df.drop(columns=['F. Int - Formula','NHC - Textos','NHC - Formula'], inplace=True)
+            base_df['INICIADOR SAMES'] = base_df['INICIADOR SAMES'].fillna('NHC NO ENCONTRADO')
 
             st.dataframe(base_df.head(100))
             
             # Download the processed file
             st.subheader("Step 4: Download")
-            csv = base_df.to_csv(index=False)
+            csv = base_df.to_csv(index=False, encoding='utf-8')
             st.download_button(
                 label="Download Processed Base File",
                 data=csv,
