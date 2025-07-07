@@ -617,7 +617,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             st.write("Extracting data from SAMES..")
 
             # # Create a mapping dictionary from po_df
-            sames_mapping = dict(zip(sames_df['NHC NUMERO'], sames_df['Comisionista (11)']))
+            sames_mapping = dict(zip(sames_df['Nº Historial Clínico'], sames_df['Comisionista (11)']))
 
             base_df['INICIADOR SAMES'] = None
             base_df['INICIADOR SAMES'] = base_df["NHC"].map(sames_mapping)
