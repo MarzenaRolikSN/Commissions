@@ -666,7 +666,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             
             # Download the processed file
             st.subheader("Step 4: Download")
-            csv = base_df.to_csv(index=False, encoding='utf-8')
+            csv = base_df.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
                 label="Download Processed Base File",
                 data=csv,
