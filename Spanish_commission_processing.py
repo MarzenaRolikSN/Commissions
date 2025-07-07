@@ -24,11 +24,13 @@ col1, col2 = st.columns(2)
 with col1:
     base_file = st.file_uploader("Upload Base File", type=["csv", "xlsx"])
     sap_notes_file = st.file_uploader("Upload SAP Notes File", type=["csv", "xlsx"])
-    classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
-    attributes_file = st.file_uploader("Upload Attributes File", type=["csv", "xlsx"])
+    master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
+
+    #classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
+    #attributes_file = st.file_uploader("Upload Attributes File", type=["csv", "xlsx"])
 
 with col2:
-    master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
+    #master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
     sames_file = st.file_uploader("Upload SAMES File", type=["csv", "xlsx"])
     PO_file = st.file_uploader("Upload SAP DATA - PO NUMBER, DATE, REFERENCE", type=["csv", "xlsx"])
 
@@ -324,21 +326,21 @@ def extract_sap_notes_info(note):
     return nhc, None, doctor
 
 # Process files when all are uploaded
-if st.button("Process Files", disabled=not all([base_file, sap_notes_file, classifications_file, master_data_es_file, attributes_file])):
+if st.button("Process Files", disabled=not all([base_file, sap_notes_file,  master_data_es_file])):
     with st.spinner("Processing files..."):
         # Read all files
         base_df = read_file(base_file)
         sap_notes_df = read_file(sap_notes_file)
-        classifications_df = read_file(classifications_file)
+        #classifications_df = read_file(classifications_file)
         master_data_es_df = read_file(master_data_es_file)
         sames_df = read_file(sames_file) if sames_file else None
         po_df = read_file(PO_file)
-        attributes_df = read_file( attributes_file)
+        #attributes_df = read_file( attributes_file)
         
-        if all([base_df is not None, sap_notes_df is not None, classifications_df is not None, master_data_es_df is not None, po_df is not None]):
+        if all([base_df is not None, sap_notes_df is not None,  master_data_es_df is not None, po_df is not None]):
             # Display original dataframes
             st.subheader("Original Data Preview")
-            tabs = st.tabs(["Base", "SAP Notes", "Classifications", "MasterDataES", "SAMES", "PO", "Attributes"])
+            tabs = st.tabs(["Base", "SAP Notes",  "MasterDataES", "SAMES", "PO"])
             
             with tabs[0]:
                 st.write("Base File Preview:")
@@ -348,28 +350,28 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                 st.write("SAP Notes File Preview:")
                 st.dataframe(sap_notes_df.head())
                 
-            with tabs[2]:
-                st.write("Classifications File Preview:")
-                st.dataframe(classifications_df.head())
+            # with tabs[2]:
+            #     st.write("Classifications File Preview:")
+            #     st.dataframe(classifications_df.head())
                 
-            with tabs[3]:
+            with tabs[2]:
                 st.write("MasterDataES File Preview:")
                 st.dataframe(master_data_es_df.head())
                 
-            with tabs[4]:
+            with tabs[3]:
                 if sames_df is not None:
                     st.write("SAMES File Preview:")
                     st.dataframe(sames_df.head())
                 else:
                     st.write("SAMES File not uploaded")
             
-            with tabs[5]:
+            with tabs[4]:
                 st.write("SAP Data - File Preview:")
                 st.dataframe(po_df.head())
             
-            with tabs[6]:
-                st.write("SAP Data - File Preview:")
-                st.dataframe(attributes_df.head())
+            # with tabs[6]:
+            #     st.write("SAP Data - File Preview:")
+            #     st.dataframe(attributes_df.head())
 
             # 1. Match with Classifications
             st.subheader("Step 2: Matching Data")
@@ -400,41 +402,41 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             
             st.success(f"SAP data mapping completed: {sum(base_df['SO PO Number'].notna())} rows updated")
 
-            st.write("Matching with Classifications file...")
+            # st.write("Matching with Classifications file...")
             
-             # Check if the required columns exist in both dataframes
-            if "ISIS Product Hierarchy Level 2 Desc" in base_df.columns and classifications_df is not None:
-                # Find the appropriate columns in Classifications file
-                hierarchy_col = None
-                classification_col = None
+            #  # Check if the required columns exist in both dataframes
+            # if "ISIS Product Hierarchy Level 2 Desc" in base_df.columns and classifications_df is not None:
+            #     # Find the appropriate columns in Classifications file
+            #     hierarchy_col = None
+            #     classification_col = None
                 
-                # Look for column names containing these patterns
-                for col in classifications_df.columns:
-                    if "ISIS Product Hierarchy Level 2" in col:
-                        hierarchy_col = col
-                    elif "Classificación Comisiones" in col:
-                        classification_col = col
+            #     # Look for column names containing these patterns
+            #     for col in classifications_df.columns:
+            #         if "ISIS Product Hierarchy Level 2" in col:
+            #             hierarchy_col = col
+            #         elif "Classificación Comisiones" in col:
+            #             classification_col = col
             
                 
-                # Display the columns we're using
-                if hierarchy_col and classification_col:
-                    st.info(f"Using columns: '{hierarchy_col}' to match with 'ISIS Product Hierarchy Level 2 Desc' and '{classification_col}' for classification values")
+            #     # Display the columns we're using
+            #     if hierarchy_col and classification_col:
+            #         st.info(f"Using columns: '{hierarchy_col}' to match with 'ISIS Product Hierarchy Level 2 Desc' and '{classification_col}' for classification values")
                     
-                    # Create a mapping dictionary from classifications_df
-                    classifications_dict = dict(zip(
-                        classifications_df[hierarchy_col], 
-                        classifications_df[classification_col]
-                    ))
+            #         # Create a mapping dictionary from classifications_df
+            #         classifications_dict = dict(zip(
+            #             classifications_df[hierarchy_col], 
+            #             classifications_df[classification_col]
+            #         ))
                     
-                    # Apply mapping to base_df
-                    base_df["Clasificación Comisiones"] = base_df["ISIS Product Hierarchy Level 2 Desc"].map(classifications_dict)
+            #         # Apply mapping to base_df
+            #         base_df["Clasificación Comisiones"] = base_df["ISIS Product Hierarchy Level 2 Desc"].map(classifications_dict)
                     
-                    # Display the mapping results
-                    st.success(f"Classification mapping completed: {sum(base_df['Clasificación Comisiones'].notna())} rows updated")
-                else:
-                    st.error("Could not find appropriate columns in Classifications file")
-            else:
-                st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
+            #         # Display the mapping results
+            #         st.success(f"Classification mapping completed: {sum(base_df['Clasificación Comisiones'].notna())} rows updated")
+            #     else:
+            #         st.error("Could not find appropriate columns in Classifications file")
+            # else:
+            #     st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
             
             # 2. Join with MasterDataES
             st.write("Joining with MasterDataES file...")
@@ -562,53 +564,53 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             if "JoinKey" in base_df.columns:
                 base_df = base_df.drop(columns=["JoinKey"])
 
-            st.write("Matching with Attributes file...")
+            # st.write("Matching with Attributes file...")
 
-            # Create a mapping dictionary from df_attribute
-            # Convert Attribute 2 to string and strip whitespace for better matching
-            attr_mapping = dict(zip(
-                attributes_df['Attribute 2'].astype(str).str.strip(), 
-                attributes_df['Description']
-            ))
+            # # Create a mapping dictionary from df_attribute
+            # # Convert Attribute 2 to string and strip whitespace for better matching
+            # attr_mapping = dict(zip(
+            #     attributes_df['Attribute 2'].astype(str).str.strip(), 
+            #     attributes_df['Description']
+            # ))
 
-            # Function to replace two-digit patterns with descriptions
-            def replace_two_digit_codes(text):
-                if pd.isna(text):
-                    return text
+            # # Function to replace two-digit patterns with descriptions
+            # def replace_two_digit_codes(text):
+            #     if pd.isna(text):
+            #         return text
                 
-                text = str(text)
+            #     text = str(text)
                 
-                # Find all two-digit patterns (like '01', '02', etc.)
-                # This regex looks for exactly 2 digits
-                pattern = r'\b\d{2}\b'
+            #     # Find all two-digit patterns (like '01', '02', etc.)
+            #     # This regex looks for exactly 2 digits
+            #     pattern = r'\b\d{2}\b'
                 
-                def replace_match(match):
-                    code = match.group()
-                    # Look up the code in our mapping
-                    if code in attr_mapping:
-                        return str(attr_mapping[code])
-                    else:
-                        return code  # Return original if no match found
+            #     def replace_match(match):
+            #         code = match.group()
+            #         # Look up the code in our mapping
+            #         if code in attr_mapping:
+            #             return str(attr_mapping[code])
+            #         else:
+            #             return code  # Return original if no match found
                 
-                # Replace all matches in the text
-                result = re.sub(pattern, replace_match, text)
-                return result
+            #     # Replace all matches in the text
+            #     result = re.sub(pattern, replace_match, text)
+            #     return result
 
-            # Apply the replacement to the Payer_Attr2 column
-            base_df['Payer_Attr2'] = base_df['Payer_Attr2'].apply(replace_two_digit_codes)
-            base_df['SoldTo_Attr2'] = base_df['SoldTo_Attr2'].apply(replace_two_digit_codes)
+            # # Apply the replacement to the Payer_Attr2 column
+            # base_df['Payer_Attr2'] = base_df['Payer_Attr2'].apply(replace_two_digit_codes)
+            # base_df['SoldTo_Attr2'] = base_df['SoldTo_Attr2'].apply(replace_two_digit_codes)
 
-            # Optional: Show some statistics about the replacement
-            print("Replacement completed!")
-            print(f"Total records processed: {len(base_df)}")
+            # # Optional: Show some statistics about the replacement
+            # print("Replacement completed!")
+            # print(f"Total records processed: {len(base_df)}")
 
-            # Check for any two-digit codes that might not have been matched
-            remaining_codes = base_df['Payer_Attr2'].astype(str).str.extractall(r'(\b\d{2}\b)')[0].unique()
-            unmatched_codes = [code for code in remaining_codes if code not in attr_mapping.keys()]
-            if unmatched_codes:
-                print(f"Warning: These two-digit codes were not found in df_attribute: {unmatched_codes}")
+            # # Check for any two-digit codes that might not have been matched
+            # remaining_codes = base_df['Payer_Attr2'].astype(str).str.extractall(r'(\b\d{2}\b)')[0].unique()
+            # unmatched_codes = [code for code in remaining_codes if code not in attr_mapping.keys()]
+            # if unmatched_codes:
+            #     print(f"Warning: These two-digit codes were not found in df_attribute: {unmatched_codes}")
             
-            st.success("Number Attributes replacement completed")
+            # st.success("Number Attributes replacement completed")
 
             # 3. Extract data from SAP Notes
             st.write("Extracting data from SAMES..")
@@ -647,7 +649,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                 mime="text/csv"
             )
         else:
-            st.error("Please upload all required files (Base, SAP Notes, Classifications, MasterDataES)")
+            st.error("Please upload all required files (Base, SAP Notes, MasterDataES)")
 
 st.markdown("---")
 st.write("This app processes your data files and performs lookups and matching operations to consolidate data into the Base file.")

@@ -6,12 +6,7 @@ import io
 from datetime import datetime
 import dateparser
 from datetime import datetime
-import ptvsd
 import re
-
-# ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True)
-
-# ptvsd.wait_for_attach()
 
 st.set_page_config(
     page_title="Spanish Commissions Data Processing Tool",
@@ -29,11 +24,13 @@ col1, col2 = st.columns(2)
 with col1:
     base_file = st.file_uploader("Upload Base File", type=["csv", "xlsx"])
     sap_notes_file = st.file_uploader("Upload SAP Notes File", type=["csv", "xlsx"])
-    classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
-    attributes_file = st.file_uploader("Upload Attributes File", type=["csv", "xlsx"])
+    master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
+
+    #classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
+    #attributes_file = st.file_uploader("Upload Attributes File", type=["csv", "xlsx"])
 
 with col2:
-    master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
+    #master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
     sames_file = st.file_uploader("Upload SAMES File", type=["csv", "xlsx"])
     PO_file = st.file_uploader("Upload SAP DATA - PO NUMBER, DATE, REFERENCE", type=["csv", "xlsx"])
 
@@ -46,7 +43,7 @@ def read_file(file):
                 encodings = ['utf-8', 'latin1', 'cp1252', 'ISO-8859-1']
                 for encoding in encodings:
                     try:
-                        return pd.read_csv(file, encoding=encoding)
+                        return pd.read_csv(file, encoding=encoding, dtype=str)
                     except UnicodeDecodeError:
                         continue
                 st.error(f"Could not decode file {file.name} with any of the attempted encodings")
@@ -56,7 +53,13 @@ def read_file(file):
                 return None
         elif file.name.endswith(('xlsx', 'xls')):
             try:
-                return pd.read_excel(file)
+                # Read the first row to get column names
+                temp_df = pd.read_excel(file, nrows=0)
+                # Rewind the file pointer to the beginning
+                file.seek(0)
+                # Build dtype dict for all columns as str
+                dtype_dict = {col: str for col in temp_df.columns}
+                return pd.read_excel(file, dtype=dtype_dict)
             except Exception as e:
                 st.error(f"Error reading Excel file: {e}")
                 return None
@@ -75,12 +78,20 @@ def normalize_date_format(date_string):
     cleaned_date = re.sub(r'[_\s]+', '', date_string.strip())
     cleaned_date = re.sub(r'[^\d\-/]', '', cleaned_date)  # Keep only digits, hyphens, and slashes
     
+        # Return None if cleaned_date is empty or only whitespace
+    if not cleaned_date or not cleaned_date.strip():
+        return None
+    
     # Try to parse with dateparser first (most reliable)
     try:
-        import dateparser
         parsed_date = dateparser.parse(cleaned_date, languages=['es', 'en'])
         if parsed_date:
+            # Compare date (ignore time part)
+            today = datetime.now().date()
+            if parsed_date.date() > today:
+                return None
             return parsed_date.strftime("%d/%m/%Y")
+        
     except ImportError:
         pass
     except Exception:
@@ -153,13 +164,13 @@ def extract_sap_notes_info(note):
     note = str(note)
     
     nhc_patterns = [
-        r'NHC:?\s*\*\*\s*([^*]+)\s*\*\*',        # NHC: ** 12345 **
-        r'NHC:?\s*\*\s*([^*]+)\s*\*',            # NHC: * 12345 *
-        r'NHC:?\s*(\d+)',                        # NHC: 12345 or NHC 12345
+        r'NHC:?\s*\*\*\s*([^*]+)\s*\*\*',  # NHC: ** 12345 **
+        r'NHC:?\s*\*\s*([^*]+)\s*\*',      # NHC: * 12345 *
+        r'NHC:?\s+(\d+)',                  # NHC: 12345 or NHC  12345
         r'NHC:?\s*(?:NUMERO|NÚMERO|N[º°]|NUM)?\.?\s*:?\s*(\d+)',  # NHC: NUMERO: 12345, NHC Nº: 12345
         r'NHC:?\s*(?:NUM|NUMERO|NÚMERO|N[º°])?\s*\.?\s*(\w+)',    # NHC NUM. ABC123
-        r'N\.?\s*H\.?\s*C\.?:?\s*(\d+)',         # N.H.C.: 12345
-        r'NH:?\s*(\d+)',                         # NH: 12345
+        r'N\.?\s*H\.?\s*C\.?:?\s+(\d+)',   # N.H.C.: 12345 (with flexible spaces)
+        r'NH:?\s+(\d+)',                   # NH: 12345 (with flexible spaces)
         r'HISTORIA:?\s*(?:NUM|NUMERO|NÚMERO|N[º°])?\s*\.?\s*(\d+)' # HISTORIA NUM. 12345
     ]
     
@@ -168,17 +179,27 @@ def extract_sap_notes_info(note):
         nhc_match = re.search(pattern, note, re.IGNORECASE)
         if nhc_match:
             nhc = nhc_match.group(1).strip()
+        # Count underscores in the matched string
+            underscore_count = nhc.count('_')
+        # If multiple underscores, set nhc to None
+            if underscore_count > 1:
+                nhc = None
+            else:
+            # Remove the underscore if there is exactly one
+                nhc = nhc.replace('_', '')
             break
+    else:
+        nhc = None
 
     doctor_patterns = [
-        r'N\.?\s*MEDICO:?\s*ºº\s*([^º]+)\s*ºº',                  # N. MEDICO: ºº Dr. Smith ºº
-        r'N\.?\s*MEDICO:?\s*\*\*\s*([^*]+)\s*\*\*',              # N. MEDICO: ** Dr. Smith **
-        r'DOCTOR:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)', # DOCTOR: Dr. Smith OTHER_FIELD:
-        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',    # DR. Dr. Smith OTHER_FIELD:
-        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)$',              # DR. Dr. Smith (at end of text)
+        r'N\.?\s*MEDICO:?\s*ºº\s*([^º]+)\s*ºº',  # N. MEDICO: ºº Dr. Smith ºº
+        r'N\.?\s*MEDICO:?\s*\*\*\s*([^*]+)\s*\*\*',  # N. MEDICO: ** Dr. Smith **
+        r'DOCTOR:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',  # DOCTOR: Dr. Smith OTHER_FIELD:
+        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)',  # DR. Dr. Smith OTHER_FIELD:
+        r'DR\.?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)$',  # DR. Dr. Smith (at end of text)
         r'MEDICO:?\s*(?:\/|:)?\s*([A-Za-zÀ-ÿ\s.,]+?)(?:\s+\w+:)'  # MEDICO: Dr. Smith OTHER_FIELD:
     ]
-    
+
     # Extract doctor name
     doctor = None
     for pattern in doctor_patterns:
@@ -203,12 +224,22 @@ def extract_sap_notes_info(note):
     
     # Step 2: Extract specific date text using regex patterns
     fecha_patterns = [
-        r'F\.?\s*INTERVENCIÓN:?\s*\[\[\s*([^\]]+)',       # F.INTERVENCIÓN: [[ date
-        r'F\.?\s*INT\.?:?\s*\[\[\s*([^\]]+)',             # F.INT: [[ date
-        r'F\.?\s*INTERVENCIÓN:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # F.INTERVENCIÓN: 01/01/2023
-        r'F\.?\s*INT\.?:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',        # F.INT: 01/01/2023
-        r'FECHA\s*(?:DE)?\s*(?:LA)?\s*INTERVENCIÓN:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # FECHA DE LA INTERVENCIÓN: 01/01/2023
-        r'INTERVENIDO:?\s*(?:EL|EN)?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})'                  # INTERVENIDO EL 01/01/2023
+        # F.INTERVENCIÓN: [[ 20.01.4.2025]], F.INTERVENCIÓN: [[ 20./01/2025]], F.INTERVENCIÓN: [[ 2.052025 ]], F.INTERVENCIÓN: [[ 2052025 ]]
+        r'F\.?\s*INTERVENCI[ÓO]N:?\s*\[\[\s*([\d./\s]+)\s*\]\]',
+        # FECHA INT.: [[ 03/05/2025 ]], FECHA INT [[ 03/05/2025 ]], FECHA INT: [[ 03/05/2025 ]]
+        r'FECHA\s*INT\.?:?\s*\[\[\s*([\d./\s]+)\s*\]\]',
+        r'FECHA\s*INT\.?\s*\[\[\s*([\d./\s]+)\s*\]\]',  # Handles missing colon
+        # F.I. 26.03.2025, F.I 14/02/2025
+        r'F\.?\s*I\.?\s*[:.]?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # FECHA: 19/04/23
+        r'FECHA:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # F.INTERVENCIÓN: 01/01/2023, F.INT: 01/01/2023
+        r'F\.?\s*INTERVENCI[ÓO]N:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        r'F\.?\s*INT\.?:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # FECHA DE LA INTERVENCIÓN: 01/01/2023
+        r'FECHA\s*(?:DE)?\s*(?:LA)?\s*INTERVENCI[ÓO]N:?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
+        # INTERVENIDO EL 01/01/2023
+        r'INTERVENIDO:?\s*(?:EL|EN)?\s*([\d]{1,2}[./][\d]{1,2}[./][\d]{2,4})',
     ]
     
     fecha_raw = None
@@ -295,21 +326,21 @@ def extract_sap_notes_info(note):
     return nhc, None, doctor
 
 # Process files when all are uploaded
-if st.button("Process Files", disabled=not all([base_file, sap_notes_file, classifications_file, master_data_es_file, attributes_file])):
+if st.button("Process Files", disabled=not all([base_file, sap_notes_file,  master_data_es_file])):
     with st.spinner("Processing files..."):
         # Read all files
         base_df = read_file(base_file)
         sap_notes_df = read_file(sap_notes_file)
-        classifications_df = read_file(classifications_file)
+        #classifications_df = read_file(classifications_file)
         master_data_es_df = read_file(master_data_es_file)
         sames_df = read_file(sames_file) if sames_file else None
         po_df = read_file(PO_file)
-        attributes_df = read_file( attributes_file)
+        #attributes_df = read_file( attributes_file)
         
-        if all([base_df is not None, sap_notes_df is not None, classifications_df is not None, master_data_es_df is not None, po_df is not None]):
+        if all([base_df is not None, sap_notes_df is not None,  master_data_es_df is not None, po_df is not None]):
             # Display original dataframes
             st.subheader("Original Data Preview")
-            tabs = st.tabs(["Base", "SAP Notes", "Classifications", "MasterDataES", "SAMES", "PO", "Attributes"])
+            tabs = st.tabs(["Base", "SAP Notes",  "MasterDataES", "SAMES", "PO"])
             
             with tabs[0]:
                 st.write("Base File Preview:")
@@ -319,28 +350,28 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                 st.write("SAP Notes File Preview:")
                 st.dataframe(sap_notes_df.head())
                 
-            with tabs[2]:
-                st.write("Classifications File Preview:")
-                st.dataframe(classifications_df.head())
+            # with tabs[2]:
+            #     st.write("Classifications File Preview:")
+            #     st.dataframe(classifications_df.head())
                 
-            with tabs[3]:
+            with tabs[2]:
                 st.write("MasterDataES File Preview:")
                 st.dataframe(master_data_es_df.head())
                 
-            with tabs[4]:
+            with tabs[3]:
                 if sames_df is not None:
                     st.write("SAMES File Preview:")
                     st.dataframe(sames_df.head())
                 else:
                     st.write("SAMES File not uploaded")
             
-            with tabs[5]:
+            with tabs[4]:
                 st.write("SAP Data - File Preview:")
                 st.dataframe(po_df.head())
             
-            with tabs[6]:
-                st.write("SAP Data - File Preview:")
-                st.dataframe(attributes_df.head())
+            # with tabs[6]:
+            #     st.write("SAP Data - File Preview:")
+            #     st.dataframe(attributes_df.head())
 
             # 1. Match with Classifications
             st.subheader("Step 2: Matching Data")
@@ -371,41 +402,41 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             
             st.success(f"SAP data mapping completed: {sum(base_df['SO PO Number'].notna())} rows updated")
 
-            st.write("Matching with Classifications file...")
+            # st.write("Matching with Classifications file...")
             
-             # Check if the required columns exist in both dataframes
-            if "ISIS Product Hierarchy Level 2 Desc" in base_df.columns and classifications_df is not None:
-                # Find the appropriate columns in Classifications file
-                hierarchy_col = None
-                classification_col = None
+            #  # Check if the required columns exist in both dataframes
+            # if "ISIS Product Hierarchy Level 2 Desc" in base_df.columns and classifications_df is not None:
+            #     # Find the appropriate columns in Classifications file
+            #     hierarchy_col = None
+            #     classification_col = None
                 
-                # Look for column names containing these patterns
-                for col in classifications_df.columns:
-                    if "ISIS Product Hierarchy Level 2" in col:
-                        hierarchy_col = col
-                    elif "Classificación Comisiones" in col:
-                        classification_col = col
+            #     # Look for column names containing these patterns
+            #     for col in classifications_df.columns:
+            #         if "ISIS Product Hierarchy Level 2" in col:
+            #             hierarchy_col = col
+            #         elif "Classificación Comisiones" in col:
+            #             classification_col = col
             
                 
-                # Display the columns we're using
-                if hierarchy_col and classification_col:
-                    st.info(f"Using columns: '{hierarchy_col}' to match with 'ISIS Product Hierarchy Level 2 Desc' and '{classification_col}' for classification values")
+            #     # Display the columns we're using
+            #     if hierarchy_col and classification_col:
+            #         st.info(f"Using columns: '{hierarchy_col}' to match with 'ISIS Product Hierarchy Level 2 Desc' and '{classification_col}' for classification values")
                     
-                    # Create a mapping dictionary from classifications_df
-                    classifications_dict = dict(zip(
-                        classifications_df[hierarchy_col], 
-                        classifications_df[classification_col]
-                    ))
+            #         # Create a mapping dictionary from classifications_df
+            #         classifications_dict = dict(zip(
+            #             classifications_df[hierarchy_col], 
+            #             classifications_df[classification_col]
+            #         ))
                     
-                    # Apply mapping to base_df
-                    base_df["Clasificación Comisiones"] = base_df["ISIS Product Hierarchy Level 2 Desc"].map(classifications_dict)
+            #         # Apply mapping to base_df
+            #         base_df["Clasificación Comisiones"] = base_df["ISIS Product Hierarchy Level 2 Desc"].map(classifications_dict)
                     
-                    # Display the mapping results
-                    st.success(f"Classification mapping completed: {sum(base_df['Clasificación Comisiones'].notna())} rows updated")
-                else:
-                    st.error("Could not find appropriate columns in Classifications file")
-            else:
-                st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
+            #         # Display the mapping results
+            #         st.success(f"Classification mapping completed: {sum(base_df['Clasificación Comisiones'].notna())} rows updated")
+            #     else:
+            #         st.error("Could not find appropriate columns in Classifications file")
+            # else:
+            #     st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
             
             # 2. Join with MasterDataES
             st.write("Joining with MasterDataES file...")
@@ -470,16 +501,58 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                     
                     # Extract information from SAP Notes
                     # Extract information from SAP Notes
-                    base_df["NHC - Textos"] = None
+                    base_df["NHC"] = None
                     base_df["F. Int - Textos"] = None
-                    base_df["Surgeon Name"] = None
+                    base_df["DOCTOR"] = None
+
+                    NHC_From_SO_PO_patterns = r'NHC\s*(?:CIC\s+(\d+(?:\s*/\s*\d+)?)|:?\s*\*{0,2}\s*([A-Za-z0-9]+(?:\s*/\s*[A-Za-z0-9]+)?)\s*\*{0,2})'
 
                     for idx, note in enumerate(base_df["SAPNotes"]):
                         if pd.notna(note):
                             nhc, fecha_int, doctor = extract_sap_notes_info(note)
-                            base_df.at[idx, "NHC - Textos"] = nhc
-                            base_df.at[idx, "F. Int - Textos"] = fecha_int
-                            base_df.at[idx, "Surgeon Name"] = doctor
+                            if nhc is not None:
+                                base_df.at[idx, "NHC"] = nhc
+                            else:
+                                so_po = base_df.at[idx, "SO PO Number"]
+                                match = re.search(NHC_From_SO_PO_patterns, so_po)
+
+                                if match:
+                                    nhc = match.group(1) or match.group(2)  # Extract the captured group (the number or numbers with slash)
+                                    base_df.at[idx, "NHC"] = nhc
+                                else:
+                                    base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
+
+                            if fecha_int is not None and fecha_int != "None":
+                                base_df.at[idx, "F. Int - Textos"] = fecha_int
+                            else:
+                                invoice_date_value = base_df.at[idx, "Invoice Date"]
+                                #     # Convert to datetime if not already, handle errors gracefully
+                                # if not isinstance(invoice_date_value, pd.Timestamp):
+                                invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
+                                if pd.notnull(invoice_date_value):
+                                    base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
+
+                            if doctor and doctor.strip() and not re.fullmatch(r"_+", doctor.strip()):
+                                base_df.at[idx, "DOCTOR"] = doctor.strip()
+                            else:
+                                base_df.at[idx, "DOCTOR"] = 'NO INFORMADO'
+                        else:
+                            invoice_date_value = base_df.at[idx, "Invoice Date"]
+                             # Convert to datetime if not already, handle errors gracefully
+                            if not isinstance(invoice_date_value, pd.Timestamp):
+                                invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
+
+                                if pd.notnull(invoice_date_value):
+                                    base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
+                            
+                            so_po = base_df.at[idx, "SO PO Number"]
+                            match = re.search(NHC_From_SO_PO_patterns, so_po)
+
+                            if match:
+                                nhc = match.group(1) or match.group(2) # Extract the captured group (the number or numbers with slash)
+                                base_df.at[idx, "NHC"] = nhc
+                            else:
+                                base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
                     
                     st.success("SAP Notes extraction completed")
                 else:
@@ -491,57 +564,79 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
             if "JoinKey" in base_df.columns:
                 base_df = base_df.drop(columns=["JoinKey"])
 
-            st.write("Matching with Attributes file...")
+            # st.write("Matching with Attributes file...")
 
-            # Create a mapping dictionary from df_attribute
-            # Convert Attribute 2 to string and strip whitespace for better matching
-            attr_mapping = dict(zip(
-                attributes_df['Attribute 2'].astype(str).str.strip(), 
-                attributes_df['Description']
-            ))
+            # # Create a mapping dictionary from df_attribute
+            # # Convert Attribute 2 to string and strip whitespace for better matching
+            # attr_mapping = dict(zip(
+            #     attributes_df['Attribute 2'].astype(str).str.strip(), 
+            #     attributes_df['Description']
+            # ))
 
-            # Function to replace two-digit patterns with descriptions
-            def replace_two_digit_codes(text):
-                if pd.isna(text):
-                    return text
+            # # Function to replace two-digit patterns with descriptions
+            # def replace_two_digit_codes(text):
+            #     if pd.isna(text):
+            #         return text
                 
-                text = str(text)
+            #     text = str(text)
                 
-                # Find all two-digit patterns (like '01', '02', etc.)
-                # This regex looks for exactly 2 digits
-                pattern = r'\b\d{2}\b'
+            #     # Find all two-digit patterns (like '01', '02', etc.)
+            #     # This regex looks for exactly 2 digits
+            #     pattern = r'\b\d{2}\b'
                 
-                def replace_match(match):
-                    code = match.group()
-                    # Look up the code in our mapping
-                    if code in attr_mapping:
-                        return str(attr_mapping[code])
-                    else:
-                        return code  # Return original if no match found
+            #     def replace_match(match):
+            #         code = match.group()
+            #         # Look up the code in our mapping
+            #         if code in attr_mapping:
+            #             return str(attr_mapping[code])
+            #         else:
+            #             return code  # Return original if no match found
                 
-                # Replace all matches in the text
-                result = re.sub(pattern, replace_match, text)
-                return result
+            #     # Replace all matches in the text
+            #     result = re.sub(pattern, replace_match, text)
+            #     return result
 
-            # Apply the replacement to the Payer_Attr2 column
-            base_df['Payer_Attr2'] = base_df['Payer_Attr2'].apply(replace_two_digit_codes)
-            base_df['SoldTo_Attr2'] = base_df['SoldTo_Attr2'].apply(replace_two_digit_codes)
+            # # Apply the replacement to the Payer_Attr2 column
+            # base_df['Payer_Attr2'] = base_df['Payer_Attr2'].apply(replace_two_digit_codes)
+            # base_df['SoldTo_Attr2'] = base_df['SoldTo_Attr2'].apply(replace_two_digit_codes)
 
-            # Optional: Show some statistics about the replacement
-            print("Replacement completed!")
-            print(f"Total records processed: {len(base_df)}")
+            # # Optional: Show some statistics about the replacement
+            # print("Replacement completed!")
+            # print(f"Total records processed: {len(base_df)}")
 
-            # Check for any two-digit codes that might not have been matched
-            remaining_codes = base_df['Payer_Attr2'].astype(str).str.extractall(r'(\b\d{2}\b)')[0].unique()
-            unmatched_codes = [code for code in remaining_codes if code not in attr_mapping.keys()]
-            if unmatched_codes:
-                print(f"Warning: These two-digit codes were not found in df_attribute: {unmatched_codes}")
+            # # Check for any two-digit codes that might not have been matched
+            # remaining_codes = base_df['Payer_Attr2'].astype(str).str.extractall(r'(\b\d{2}\b)')[0].unique()
+            # unmatched_codes = [code for code in remaining_codes if code not in attr_mapping.keys()]
+            # if unmatched_codes:
+            #     print(f"Warning: These two-digit codes were not found in df_attribute: {unmatched_codes}")
             
-            st.success("Number Attributes replacement completed")
+            # st.success("Number Attributes replacement completed")
+
+            # 3. Extract data from SAP Notes
+            st.write("Extracting data from SAMES..")
+
+            # # Create a mapping dictionary from po_df
+            sames_mapping = dict(zip(sames_df['NHC NUMERO'], sames_df['Comisionista (11)']))
+
+            base_df['INICIADOR SAMES'] = None
+            base_df['INICIADOR SAMES'] = base_df["NHC"].map(sames_mapping)
+
+
+            # Optional: Check for any unmatched records
+            unmatched = base_df['INICIADOR SAMES'].isna().sum()
+            if unmatched > 0:
+                print(f"Warning: {unmatched} records could not be matched")
+            
+            st.success(f"SAMES mapping completed: {sum(base_df['INICIADOR SAMES'].notna())} rows updated")
+
 
             # Show the processed dataframe
             st.subheader("Step 3: Results")
             st.write("Processed Base File Preview:")
+            
+            #base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
+            base_df["Invoice Date"] = pd.to_datetime(base_df["Invoice Date"], errors='coerce').dt.strftime("%d/%m/%Y")
+
             st.dataframe(base_df.head(100))
             
             # Download the processed file
@@ -554,7 +649,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file, class
                 mime="text/csv"
             )
         else:
-            st.error("Please upload all required files (Base, SAP Notes, Classifications, MasterDataES)")
+            st.error("Please upload all required files (Base, SAP Notes, MasterDataES)")
 
 st.markdown("---")
 st.write("This app processes your data files and performs lookups and matching operations to consolidate data into the Base file.")
