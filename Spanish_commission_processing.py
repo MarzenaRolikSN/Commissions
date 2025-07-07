@@ -341,7 +341,8 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                 po_df is not None]):
             # Display original dataframes
             st.subheader("Original Data Preview")
-            tabs = st.tabs(["Base", "SAP Notes",  "MasterDataES", "SAMES", "PO"])
+            tabs = st.tabs(["Base", "SAP Notes", # "MasterDataES", 
+                            "SAMES", "PO"])
             
             with tabs[0]:
                 st.write("Base File Preview:")
@@ -627,8 +628,10 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             unmatched = base_df['INICIADOR SAMES'].isna().sum()
             if unmatched > 0:
                 print(f"Warning: {unmatched} records could not be matched")
-            
-            st.success(f"SAMES mapping completed: {sum(base_df['INICIADOR SAMES'].notna())} rows updated")
+            sum_not_matched = sum(base_df['INICIADOR SAMES'].notna())
+            base_df['INICIADOR SAMES'] = base_df['INICIADOR SAMES'].fillna('NHC NO ENCONTRADO')
+
+            st.success(f"SAMES mapping completed: {sum_not_matched} rows matched")
 
 
             # Show the processed dataframe
