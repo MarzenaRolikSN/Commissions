@@ -40,7 +40,7 @@ def read_file(file):
         if file.name.endswith('csv'):
             try:
                 # Try different encodings
-                encodings = ['utf-8', 'latin1', 'cp1252', 'ISO-8859-1']
+                encodings = ['utf-8']#, 'latin1', 'cp1252', 'ISO-8859-1']
                 for encoding in encodings:
                     try:
                         return pd.read_csv(file, encoding=encoding, dtype=str)
@@ -658,9 +658,10 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             
             #base_df["F. Int - Textos"] = base_df["F. Int - Textos"].astype(str)
             base_df["Invoice Date"] = pd.to_datetime(base_df["Invoice Date"], errors='coerce').dt.strftime("%d/%m/%Y")
-            base_df.drop(columns=['F. Int - Formula','NHC - Textos','NHC - Formula'], inplace=True)
+            base_df.drop(columns=['F. Int - Formula','NHC - Textos','NHC - Formula','Dr - Textos'], inplace=True)
             base_df['INICIADOR SAMES'] = base_df['INICIADOR SAMES'].fillna('NHC NO ENCONTRADO')
-
+            cols = [col for col in base_df.columns if col != 'SAPNotes'] + ['SAPNotes']
+            df = base_df[cols]
             st.dataframe(base_df.head(100))
             
             # Download the processed file
