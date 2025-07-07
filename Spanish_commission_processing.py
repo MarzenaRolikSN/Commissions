@@ -572,7 +572,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                             return 'NO INFORMADO'
                         return value
 
-                    base_df['Doctor'] = base_df['Doctor'].apply(clean_doctor)
+                    base_df['DOCTOR'] = base_df['DOCTOR'].apply(clean_doctor)
 
                     st.success("SAP Notes extraction completed")
                 else:
