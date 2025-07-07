@@ -24,7 +24,7 @@ col1, col2 = st.columns(2)
 with col1:
     base_file = st.file_uploader("Upload Base File", type=["csv", "xlsx"])
     sap_notes_file = st.file_uploader("Upload SAP Notes File", type=["csv", "xlsx"])
-    master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
+    #master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
 
     #classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
     #attributes_file = st.file_uploader("Upload Attributes File", type=["csv", "xlsx"])
@@ -326,18 +326,19 @@ def extract_sap_notes_info(note):
     return nhc, None, doctor
 
 # Process files when all are uploaded
-if st.button("Process Files", disabled=not all([base_file, sap_notes_file,  master_data_es_file])):
+if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#,  master_data_es_file])):
     with st.spinner("Processing files..."):
         # Read all files
         base_df = read_file(base_file)
         sap_notes_df = read_file(sap_notes_file)
         #classifications_df = read_file(classifications_file)
-        master_data_es_df = read_file(master_data_es_file)
+        #master_data_es_df = read_file(master_data_es_file)
         sames_df = read_file(sames_file) if sames_file else None
         po_df = read_file(PO_file)
         #attributes_df = read_file( attributes_file)
         
-        if all([base_df is not None, sap_notes_df is not None,  master_data_es_df is not None, po_df is not None]):
+        if all([base_df is not None, sap_notes_df is not None,  #master_data_es_df is not None, 
+                po_df is not None]):
             # Display original dataframes
             st.subheader("Original Data Preview")
             tabs = st.tabs(["Base", "SAP Notes",  "MasterDataES", "SAMES", "PO"])
@@ -354,18 +355,18 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file,  mast
             #     st.write("Classifications File Preview:")
             #     st.dataframe(classifications_df.head())
                 
-            with tabs[2]:
-                st.write("MasterDataES File Preview:")
-                st.dataframe(master_data_es_df.head())
+            # with tabs[2]:
+            #     st.write("MasterDataES File Preview:")
+            #     st.dataframe(master_data_es_df.head())
                 
-            with tabs[3]:
+            with tabs[2]:
                 if sames_df is not None:
                     st.write("SAMES File Preview:")
                     st.dataframe(sames_df.head())
                 else:
                     st.write("SAMES File not uploaded")
             
-            with tabs[4]:
+            with tabs[3]:
                 st.write("SAP Data - File Preview:")
                 st.dataframe(po_df.head())
             
@@ -439,50 +440,50 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file,  mast
             #     st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
             
             # 2. Join with MasterDataES
-            st.write("Joining with MasterDataES file...")
-            if all(col in base_df.columns for col in ["IDBillDoc", "IDBillDocItem"]) and master_data_es_df is not None:
-                # Find the corresponding columns in MasterDataES
-                bill_doc_col = next((col for col in master_data_es_df.columns if "billdoc" in col.lower() and "item" not in col.lower()), None)
-                bill_doc_item_col = next((col for col in master_data_es_df.columns if ("billdocitem" in col.lower()) or ("billdoc" in col.lower() and "item" in col.lower())), None)
-                current_corrected_id_col = next((col for col in master_data_es_df.columns if "currentcorrected" in col.lower() and ("id" in col.lower() or col.lower().endswith("id"))), None)
+            # st.write("Joining with MasterDataES file...")
+            # if all(col in base_df.columns for col in ["IDBillDoc", "IDBillDocItem"]) and master_data_es_df is not None:
+            #     # Find the corresponding columns in MasterDataES
+            #     bill_doc_col = next((col for col in master_data_es_df.columns if "billdoc" in col.lower() and "item" not in col.lower()), None)
+            #     bill_doc_item_col = next((col for col in master_data_es_df.columns if ("billdocitem" in col.lower()) or ("billdoc" in col.lower() and "item" in col.lower())), None)
+            #     current_corrected_id_col = next((col for col in master_data_es_df.columns if "currentcorrected" in col.lower() and ("id" in col.lower() or col.lower().endswith("id"))), None)
                 
-                # Check if all required columns were found
-                if all([bill_doc_col, bill_doc_item_col, current_corrected_id_col]):
-                    st.info(f"Joining on '{bill_doc_col}', '{bill_doc_item_col}' to get '{current_corrected_id_col}'")
+            #     # Check if all required columns were found
+            #     if all([bill_doc_col, bill_doc_item_col, current_corrected_id_col]):
+            #         st.info(f"Joining on '{bill_doc_col}', '{bill_doc_item_col}' to get '{current_corrected_id_col}'")
                     
-                    # Perform the join directly
-                    result_df = pd.merge(
-                        base_df,
-                        master_data_es_df[[bill_doc_col, bill_doc_item_col, current_corrected_id_col]],
-                        on = ["IDBillDoc", "IDBillDocItem"],
-                        # left_on=["IDBillDoc", "IDBillDocItem"],
-                        # right_on=[bill_doc_col, bill_doc_item_col],
-                        how="left"
-                    )
+            #         # Perform the join directly
+            #         result_df = pd.merge(
+            #             base_df,
+            #             master_data_es_df[[bill_doc_col, bill_doc_item_col, current_corrected_id_col]],
+            #             on = ["IDBillDoc", "IDBillDocItem"],
+            #             # left_on=["IDBillDoc", "IDBillDocItem"],
+            #             # right_on=[bill_doc_col, bill_doc_item_col],
+            #             how="left"
+            #         )
                     
-                    # Rename the columns to standardized names
-                    result_df = result_df.rename(columns={
-                        'IDCurrentCorrected_y': "IDCurrentCorrected"
-                    })
+            #         # Rename the columns to standardized names
+            #         result_df = result_df.rename(columns={
+            #             'IDCurrentCorrected_y': "IDCurrentCorrected"
+            #         })
                     
                     # # Drop the redundant columns from the join
                     # result_df = result_df.drop(columns=[bill_doc_col, bill_doc_item_col])
                     
                     # Update the base dataframe
-                    base_df = result_df
+                    #base_df = result_df
                     
                     # Display the results
                     #st.success(f"MasterDataES joining completed: {base_df.columns}")
 
-                    st.success(f"MasterDataES joining completed: {sum(base_df['IDCurrentCorrected'].notna())} rows updated")
-                else:
-                    missing_cols = []
-                    if not bill_doc_col: missing_cols.append("BillDoc")
-                    if not bill_doc_item_col: missing_cols.append("BillDocItem")
-                    if not current_corrected_id_col: missing_cols.append("CurrentCorrectedID")
-                    st.error(f"Could not find required columns in MasterDataES: {', '.join(missing_cols)}")
-            else:
-                st.warning("Could not join with MasterDataES - required columns not found in Base file")
+            #         st.success(f"MasterDataES joining completed: {sum(base_df['IDCurrentCorrected'].notna())} rows updated")
+            #     else:
+            #         missing_cols = []
+            #         if not bill_doc_col: missing_cols.append("BillDoc")
+            #         if not bill_doc_item_col: missing_cols.append("BillDocItem")
+            #         if not current_corrected_id_col: missing_cols.append("CurrentCorrectedID")
+            #         st.error(f"Could not find required columns in MasterDataES: {', '.join(missing_cols)}")
+            # else:
+            #     st.warning("Could not join with MasterDataES - required columns not found in Base file")
             
             # 3. Extract data from SAP Notes
             st.write("Extracting data from SAP Notes...")
