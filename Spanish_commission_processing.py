@@ -527,7 +527,11 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                             if fecha_int is not None and fecha_int != "None":
                                 base_df.at[idx, "F. Int - Textos"] = fecha_int
                             else:
-                                invoice_date_value = base_df.at[idx, "Invoice Date"]
+                                try:
+                                    invoice_date_value = base_df.at[idx, "Invoice Date"]
+                                except:
+                                    invoice_date_value = base_df.at[idx, "Date"]
+
                                 #     # Convert to datetime if not already, handle errors gracefully
                                 # if not isinstance(invoice_date_value, pd.Timestamp):
                                 invoice_date_value = pd.to_datetime(invoice_date_value, errors='coerce')
