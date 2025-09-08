@@ -24,6 +24,8 @@ col1, col2 = st.columns(2)
 with col1:
     base_file = st.file_uploader("Upload Base File", type=["csv", "xlsx"])
     sap_notes_file = st.file_uploader("Upload SAP Notes File", type=["csv", "xlsx"])
+    sames_file = st.file_uploader("Upload SAMES File", type=["csv", "xlsx"])
+    PO_file = st.file_uploader("Upload SAP DATA - PO NUMBER, DATE, REFERENCE", type=["csv", "xlsx"])
     #master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
 
     #classifications_file = st.file_uploader("Upload Classifications File", type=["csv", "xlsx"])
@@ -31,8 +33,9 @@ with col1:
 
 with col2:
     #master_data_es_file = st.file_uploader("Upload MasterDataES File", type=["csv", "xlsx"])
-    sames_file = st.file_uploader("Upload SAMES File", type=["csv", "xlsx"])
-    PO_file = st.file_uploader("Upload SAP DATA - PO NUMBER, DATE, REFERENCE", type=["csv", "xlsx"])
+    comments_SN_file = st.file_uploader("Upload INCIDENCIAS + RECLASIFICACIONES File", type=["csv", "xlsx"])
+    invoices_commissioned_file = st.file_uploader("Upload FACTURAS COMISIONADAS", type=["csv", "xlsx"])
+    focus_products_file = st.file_uploader("Upload PRODUCTOS FOCUS", type=["csv", "xlsx"])
 
 # Function to read either CSV or Excel files
 def read_file(file):
@@ -335,6 +338,10 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
         #master_data_es_df = read_file(master_data_es_file)
         sames_df = read_file(sames_file) if sames_file else None
         po_df = read_file(PO_file)
+        comments_SN__df = read_file(comments_SN_file) 
+        invoices_commissioned_df = read_file(invoices_commissioned_file)
+        focus_products_df = read_file(focus_products_file)
+        ()
         #attributes_df = read_file( attributes_file)
         
         if all([base_df is not None, sap_notes_df is not None,  #master_data_es_df is not None, 
@@ -342,7 +349,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             # Display original dataframes
             st.subheader("Original Data Preview")
             tabs = st.tabs(["Base", "SAP Notes", # "MasterDataES", 
-                            "SAMES", "PO"])
+                            "SAMES", "PO","INCIDENCIAS + RECLASIFICACIONES", "FACTURAS COMISIONADAS","PRODUCTOS FOCUS"])
             
             with tabs[0]:
                 st.write("Base File Preview:")
@@ -351,14 +358,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             with tabs[1]:
                 st.write("SAP Notes File Preview:")
                 st.dataframe(sap_notes_df.head())
-                
-            # with tabs[2]:
-            #     st.write("Classifications File Preview:")
-            #     st.dataframe(classifications_df.head())
-                
-            # with tabs[2]:
-            #     st.write("MasterDataES File Preview:")
-            #     st.dataframe(master_data_es_df.head())
+            
                 
             with tabs[2]:
                 if sames_df is not None:
@@ -370,10 +370,19 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             with tabs[3]:
                 st.write("SAP Data - File Preview:")
                 st.dataframe(po_df.head())
-            
-            # with tabs[6]:
-            #     st.write("SAP Data - File Preview:")
-            #     st.dataframe(attributes_df.head())
+
+            with tabs[4]:
+                st.write("INCIDENCIAS + RECLASIFICACIONES - File Preview:")
+                st.dataframe(comments_SN__df.head())
+
+            with tabs[5]:
+                st.write("FACTURAS COMISIONADAS - File Preview:")
+                st.dataframe(invoices_commissioned_df.head())
+
+            with tabs[6]:
+                st.write("PRODUCTOS FOCUS - File Preview:")
+                st.dataframe(focus_products_df.head())
+
 
             # 1. Match with Classifications
             st.subheader("Step 2: Matching Data")
@@ -405,88 +414,6 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                 print(f"Warning: {unmatched} records could not be matched")
             
             st.success(f"SAP data mapping completed: {sum(base_df['SO PO Number'].notna())} rows updated")
-
-            # st.write("Matching with Classifications file...")
-            
-            #  # Check if the required columns exist in both dataframes
-            # if "ISIS Product Hierarchy Level 2 Desc" in base_df.columns and classifications_df is not None:
-            #     # Find the appropriate columns in Classifications file
-            #     hierarchy_col = None
-            #     classification_col = None
-                
-            #     # Look for column names containing these patterns
-            #     for col in classifications_df.columns:
-            #         if "ISIS Product Hierarchy Level 2" in col:
-            #             hierarchy_col = col
-            #         elif "Classificación Comisiones" in col:
-            #             classification_col = col
-            
-                
-            #     # Display the columns we're using
-            #     if hierarchy_col and classification_col:
-            #         st.info(f"Using columns: '{hierarchy_col}' to match with 'ISIS Product Hierarchy Level 2 Desc' and '{classification_col}' for classification values")
-                    
-            #         # Create a mapping dictionary from classifications_df
-            #         classifications_dict = dict(zip(
-            #             classifications_df[hierarchy_col], 
-            #             classifications_df[classification_col]
-            #         ))
-                    
-            #         # Apply mapping to base_df
-            #         base_df["Clasificación Comisiones"] = base_df["ISIS Product Hierarchy Level 2 Desc"].map(classifications_dict)
-                    
-            #         # Display the mapping results
-            #         st.success(f"Classification mapping completed: {sum(base_df['Clasificación Comisiones'].notna())} rows updated")
-            #     else:
-            #         st.error("Could not find appropriate columns in Classifications file")
-            # else:
-            #     st.warning("Could not match classifications - column 'ISIS Product Hierarchy Level 2 Desc' not found in Base file or Classifications file is empty")
-            
-            # 2. Join with MasterDataES
-            # st.write("Joining with MasterDataES file...")
-            # if all(col in base_df.columns for col in ["IDBillDoc", "IDBillDocItem"]) and master_data_es_df is not None:
-            #     # Find the corresponding columns in MasterDataES
-            #     bill_doc_col = next((col for col in master_data_es_df.columns if "billdoc" in col.lower() and "item" not in col.lower()), None)
-            #     bill_doc_item_col = next((col for col in master_data_es_df.columns if ("billdocitem" in col.lower()) or ("billdoc" in col.lower() and "item" in col.lower())), None)
-            #     current_corrected_id_col = next((col for col in master_data_es_df.columns if "currentcorrected" in col.lower() and ("id" in col.lower() or col.lower().endswith("id"))), None)
-                
-            #     # Check if all required columns were found
-            #     if all([bill_doc_col, bill_doc_item_col, current_corrected_id_col]):
-            #         st.info(f"Joining on '{bill_doc_col}', '{bill_doc_item_col}' to get '{current_corrected_id_col}'")
-                    
-            #         # Perform the join directly
-            #         result_df = pd.merge(
-            #             base_df,
-            #             master_data_es_df[[bill_doc_col, bill_doc_item_col, current_corrected_id_col]],
-            #             on = ["IDBillDoc", "IDBillDocItem"],
-            #             # left_on=["IDBillDoc", "IDBillDocItem"],
-            #             # right_on=[bill_doc_col, bill_doc_item_col],
-            #             how="left"
-            #         )
-                    
-            #         # Rename the columns to standardized names
-            #         result_df = result_df.rename(columns={
-            #             'IDCurrentCorrected_y': "IDCurrentCorrected"
-            #         })
-                    
-                    # # Drop the redundant columns from the join
-                    # result_df = result_df.drop(columns=[bill_doc_col, bill_doc_item_col])
-                    
-                    # Update the base dataframe
-                    #base_df = result_df
-                    
-                    # Display the results
-                    #st.success(f"MasterDataES joining completed: {base_df.columns}")
-
-            #         st.success(f"MasterDataES joining completed: {sum(base_df['IDCurrentCorrected'].notna())} rows updated")
-            #     else:
-            #         missing_cols = []
-            #         if not bill_doc_col: missing_cols.append("BillDoc")
-            #         if not bill_doc_item_col: missing_cols.append("BillDocItem")
-            #         if not current_corrected_id_col: missing_cols.append("CurrentCorrectedID")
-            #         st.error(f"Could not find required columns in MasterDataES: {', '.join(missing_cols)}")
-            # else:
-            #     st.warning("Could not join with MasterDataES - required columns not found in Base file")
             
             # 3. Extract data from SAP Notes
             st.write("Extracting data from SAP Notes...")
@@ -562,6 +489,8 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                             else:
                                 base_df.at[idx, "NHC"] = 'NHC NO INFORMADO'
                     
+                    base_df['SO PO Number'] = base_df['SO PO Number'].replace('nan', None)
+
                     def clean_doctor(value):
                      # Handle NaN or empty strings
                         if pd.isna(value) or str(value).strip() == '':
@@ -586,54 +515,6 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             if "JoinKey" in base_df.columns:
                 base_df = base_df.drop(columns=["JoinKey"])
 
-            # st.write("Matching with Attributes file...")
-
-            # # Create a mapping dictionary from df_attribute
-            # # Convert Attribute 2 to string and strip whitespace for better matching
-            # attr_mapping = dict(zip(
-            #     attributes_df['Attribute 2'].astype(str).str.strip(), 
-            #     attributes_df['Description']
-            # ))
-
-            # # Function to replace two-digit patterns with descriptions
-            # def replace_two_digit_codes(text):
-            #     if pd.isna(text):
-            #         return text
-                
-            #     text = str(text)
-                
-            #     # Find all two-digit patterns (like '01', '02', etc.)
-            #     # This regex looks for exactly 2 digits
-            #     pattern = r'\b\d{2}\b'
-                
-            #     def replace_match(match):
-            #         code = match.group()
-            #         # Look up the code in our mapping
-            #         if code in attr_mapping:
-            #             return str(attr_mapping[code])
-            #         else:
-            #             return code  # Return original if no match found
-                
-            #     # Replace all matches in the text
-            #     result = re.sub(pattern, replace_match, text)
-            #     return result
-
-            # # Apply the replacement to the Payer_Attr2 column
-            # base_df['Payer_Attr2'] = base_df['Payer_Attr2'].apply(replace_two_digit_codes)
-            # base_df['SoldTo_Attr2'] = base_df['SoldTo_Attr2'].apply(replace_two_digit_codes)
-
-            # # Optional: Show some statistics about the replacement
-            # print("Replacement completed!")
-            # print(f"Total records processed: {len(base_df)}")
-
-            # # Check for any two-digit codes that might not have been matched
-            # remaining_codes = base_df['Payer_Attr2'].astype(str).str.extractall(r'(\b\d{2}\b)')[0].unique()
-            # unmatched_codes = [code for code in remaining_codes if code not in attr_mapping.keys()]
-            # if unmatched_codes:
-            #     print(f"Warning: These two-digit codes were not found in df_attribute: {unmatched_codes}")
-            
-            # st.success("Number Attributes replacement completed")
-
             # 3. Extract data from SAP Notes
             st.write("Extracting data from SAMES..")
 
@@ -653,6 +534,78 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
 
             st.success(f"SAMES mapping completed: {sum_not_matched} rows matched")
 
+            # 4. Exact data from INCIDENCIAS + RECLASIFICACIONES
+            st.write("Extracting data from INCIDENCIAS + RECLASIFICACIONES...")
+            
+            base_df['doc_nr_formatted'] = base_df['IDBillDoc'].astype(str).str.zfill(10)
+            comments_SN__df['doc_nr_formatted'] = comments_SN__df['IDBillDoc'].astype(str).str.zfill(10).str.strip()
+
+            # Create a mapping dictionary from comments_SN__df
+            commentario_mapping = dict(zip(comments_SN__df['doc_nr_formatted'], comments_SN__df['COMENTARIOS S+N']))
+
+            # Fill the 'COMENTARIOS S+N' column in df using the mapping
+            base_df['COMENTARIOS S+N'] = None
+            base_df['COMENTARIOS S+N'] = base_df['doc_nr_formatted'].map(commentario_mapping)
+            # base_df['COMENTARIOS S+N'] = base_df['COMENTARIOS S+N'].astype(str)
+
+            # Optional: Check for any unmatched records
+            unmatched = base_df['COMENTARIOS S+N'].isna().sum()
+            if unmatched > 0:
+                print(f"Warning: {unmatched} records could not be matched")
+            sum_not_matched = sum(base_df['COMENTARIOS S+N'].notna())
+
+            st.success(f"INCIDENCIAS + RECLASIFICACIONES mapping completed: {sum_not_matched} rows matched")
+
+            # 5. Exact data from FACTURAS COMISIONADAS
+            st.write("Extracting data from FACTURAS COMISIONADAS...")
+            invoices_commissioned_df['doc_nr_formatted'] = invoices_commissioned_df['IDBillDoc'].astype(str).str.zfill(10)
+            # invoices_mapping = dict(zip(invoices_commissioned_df['doc_nr_formatted'], invoices_commissioned_df['Comentario']))
+            # Group all relevant info by 'doc_nr_formatted'
+            agg_invoices = invoices_commissioned_df.groupby('doc_nr_formatted').apply(
+            lambda df: "LA FACTURA {} FUE COMISIONADA ".format(df['IDBillDoc'].iloc[0]) +
+               " & ".join([f"A {name} EN {period}"
+                           for name, period in zip(df['CurrentCorrected_Name'], df['PERIODO COMISION'])])
+                ).to_dict()
+
+            # Fill the 'PAGADAS' column in df using the mapping
+            base_df['PAGADAS'] = None
+            base_df['PAGADAS'] = base_df['doc_nr_formatted'].map(agg_invoices)
+            #base_df['PAGADAS'] = base_df['PAGADAS'].astype(str)
+
+            # Optional: Check for any unmatched records
+            unmatched = base_df['PAGADAS'].isna().sum()
+            if unmatched > 0:
+                print(f"Warning: {unmatched} records could not be matched")
+            sum_not_matched = sum(base_df['PAGADAS'].notna())
+
+            st.success(f"FACTURAS COMISIONADAS mapping completed: {sum_not_matched} rows matched")
+
+            # 6. Exact data from PRODUCTOS FOCUS
+            st.write("Extracting data PRODUCTOS FOCUS...")
+            base_df['material_formatted'] = base_df['IDMaterial'].astype(str).str.zfill(10)
+            focus_products_df['material_formatted'] = focus_products_df['IDMaterial'].astype(str).str.zfill(10)
+            focus_products_mapping = dict(zip(focus_products_df['material_formatted'], focus_products_df['PRODUCT TYPE']))
+
+            # Fill the 'Product Type' column in df using the mapping
+            base_df['Product Type'] = None
+
+            # For rows where BU == 'SPORTS MEDICINE', map using the dictionary
+            mask = base_df['BU'] == 'SPORTS MEDICINE'
+            base_df.loc[mask, 'Product Type'] = base_df.loc[mask, 'material_formatted'].map(focus_products_mapping)
+            base_df['Product Type'] = base_df['Product Type'].fillna('Legacy')
+            # For all other rows, use the value from BU 2
+            base_df.loc[~mask, 'Product Type'] = base_df.loc[~mask, 'BU 2']
+
+            # Optional: Check for any unmatched records
+            unmatched = base_df['Product Type'].isna().sum()
+            if unmatched > 0:
+                print(f"Warning: {unmatched} records could not be matched")
+            sum_not_matched = sum(base_df['Product Type'].notna())
+
+            st.success(f"PRODUCTOS FOCUS mapping completed: {sum_not_matched} rows matched")
+
+            base_df.drop('doc_nr_formatted', axis=1, inplace=True)
+            base_df.drop('material_formatted', axis=1, inplace=True)
 
             # Show the processed dataframe
             st.subheader("Step 3: Results")
