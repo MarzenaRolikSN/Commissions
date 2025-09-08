@@ -379,7 +379,8 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             st.subheader("Step 2: Matching Data")
 
             st.write("Matching with SAP file...")
-
+            
+            # base_df.loc[base_df['IDOrder'] == 'RECLASIFICACIÓN REBATES', 'IDOrder'] = np.nan
             base_df['doc_nr_formatted'] = base_df['IDOrder'].astype(str).str.zfill(10)
             po_df['doc_nr_formatted'] = po_df['SD Document'].astype(str).str.zfill(10)
 
@@ -391,6 +392,7 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
             base_df['SO PO Number'] = None
             base_df['Your Reference'] = None
             base_df['SO PO Number'] = base_df['doc_nr_formatted'].map(po_mapping)
+            base_df['SO PO Number'] = base_df['SO PO Number'].astype(str)
             base_df['Your Reference'] = base_df['doc_nr_formatted'].map(po_reference_mapping)
 
             # Clean up - remove the temporary formatted column if you don't need it
