@@ -488,8 +488,6 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                             else:
                                 match = None
 
-                            match = re.search(NHC_From_SO_PO_patterns, so_po)
-
                             if match:
                                 nhc = match.group(1) or match.group(2) # Extract the captured group (the number or numbers with slash)
                                 base_df.at[idx, "NHC"] = nhc
