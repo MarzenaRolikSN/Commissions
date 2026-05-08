@@ -481,6 +481,13 @@ if st.button("Process Files", disabled=not all([base_file, sap_notes_file])):#, 
                                     base_df.at[idx, "F. Int - Textos"] = invoice_date_value.strftime("%d/%m/%Y")
                             
                             so_po = base_df.at[idx, "SO PO Number"]
+
+                            
+                            if pd.notna(so_po):
+                                match = re.search(NHC_From_SO_PO_patterns, str(so_po))
+                            else:
+                                match = None
+
                             match = re.search(NHC_From_SO_PO_patterns, so_po)
 
                             if match:
